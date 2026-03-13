@@ -1,0 +1,619 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>MindEase — AI Mental Health Companion</title>
+<link href="https://fonts.googleapis.com/css2?family=DM+Serif+Display:ital@0;1&family=DM+Sans:ital,opsz,wght@0,9..40,300;0,9..40,400;0,9..40,500;1,9..40,300&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --sage: #7a9e7e; --sage-light: #a8c5ac; --sage-dark: #4a6e4f;
+    --cream: #f5f0e8; --warm-white: #faf8f4;
+    --charcoal: #2c2c2c; --muted: #7a7870;
+    --border: rgba(44,44,44,0.12);
+    --user-bubble: #2c2c2c; --bot-bubble: #edeae3;
+    --accent: #c17f5a;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    font-family: 'DM Sans', sans-serif;
+    background: var(--warm-white); color: var(--charcoal);
+    height: 100dvh; display: flex; flex-direction: column; overflow: hidden;
+  }
+  body::before {
+    content: ''; position: fixed; inset: 0; pointer-events: none; z-index: 0;
+    background-image:
+      radial-gradient(ellipse 80% 60% at 20% 10%, rgba(122,158,126,0.08) 0%, transparent 60%),
+      radial-gradient(ellipse 60% 80% at 80% 90%, rgba(193,127,90,0.06) 0%, transparent 60%);
+  }
+
+  /* ── Header ── */
+  header {
+    position: relative; z-index: 10;
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 16px 24px;
+    border-bottom: 1px solid var(--border);
+    background: rgba(250,248,244,0.95); backdrop-filter: blur(12px);
+  }
+  .logo { display: flex; align-items: center; gap: 10px; }
+  .logo-icon {
+    width: 34px; height: 34px; background: var(--sage); border-radius: 50%;
+    display: flex; align-items: center; justify-content: center; position: relative;
+  }
+  .logo-icon::after { content:''; width:13px; height:13px; background:var(--warm-white); border-radius:50%; position:absolute; }
+  .logo-icon::before { content:''; width:21px; height:21px; border:2px solid rgba(250,248,244,0.4); border-radius:50%; position:absolute; }
+  .logo-text { font-family:'DM Serif Display',serif; font-size:20px; letter-spacing:-0.3px; }
+  .logo-text span { color: var(--sage-dark); }
+  .header-right { display:flex; align-items:center; gap:8px; }
+  .status-pill {
+    display:flex; align-items:center; gap:6px; font-size:12px; color:var(--muted);
+    background:var(--cream); padding:5px 12px; border-radius:20px; border:1px solid var(--border);
+  }
+  .status-dot { width:7px; height:7px; border-radius:50%; background:#7ab87a; animation:pulse 2.5s ease-in-out infinite; }
+  .status-dot.offline { background:#e07a5f; animation:none; }
+  @keyframes pulse { 0%,100%{opacity:1;transform:scale(1)} 50%{opacity:0.5;transform:scale(0.85)} }
+  .icon-btn {
+    background:transparent; border:1px solid var(--border); border-radius:20px;
+    padding:5px 12px; font-size:12px; color:var(--muted);
+    cursor:pointer; font-family:'DM Sans',sans-serif; transition:all 0.2s; display:flex; align-items:center; gap:5px;
+  }
+  .icon-btn:hover { background:var(--cream); color:var(--charcoal); }
+  .tts-toggle.on { background:var(--sage); color:white; border-color:var(--sage); }
+
+  /* ── NLP insight bar ── */
+  .nlp-bar {
+    position: relative; z-index: 9;
+    max-height: 0; overflow: hidden;
+    transition: max-height 0.4s ease, padding 0.3s ease;
+    background: var(--cream); border-bottom: 1px solid var(--border);
+  }
+  .nlp-bar.visible { max-height: 60px; }
+  .nlp-inner {
+    max-width: 680px; margin: 0 auto; padding: 8px 24px;
+    display: flex; align-items: center; gap: 12px; flex-wrap: wrap;
+  }
+  .nlp-pill {
+    display: inline-flex; align-items: center; gap: 5px;
+    padding: 4px 10px; border-radius: 20px;
+    font-size: 11px; font-weight: 500; letter-spacing: 0.2px;
+  }
+  .nlp-pill.emotion-joy      { background:#e8f5e9; color:#2e7d32; }
+  .nlp-pill.emotion-sadness  { background:#e3f2fd; color:#1565c0; }
+  .nlp-pill.emotion-anxiety  { background:#fff8e1; color:#f57f17; }
+  .nlp-pill.emotion-anger    { background:#fce4ec; color:#880e4f; }
+  .nlp-pill.emotion-neutral  { background:#f5f5f5; color:#616161; }
+  .nlp-pill.lang   { background:#ede7f6; color:#4527a0; }
+  .nlp-pill.kw     { background:#e0f2f1; color:#00695c; }
+  .nlp-pill.crisis { background:#ffebee; color:#b71c1c; }
+
+  /* ── Chat area ── */
+  .chat-container { position:relative; z-index:1; flex:1; overflow-y:auto; padding:28px 0; scroll-behavior:smooth; }
+  .chat-container::-webkit-scrollbar { width:4px; }
+  .chat-container::-webkit-scrollbar-thumb { background:var(--border); border-radius:2px; }
+  .messages-wrap { max-width:680px; margin:0 auto; padding:0 24px; display:flex; flex-direction:column; gap:18px; }
+
+  .welcome-card {
+    background:var(--cream); border:1px solid var(--border);
+    border-radius:20px; padding:28px 32px; text-align:center; animation:fadeUp 0.5s ease both;
+  }
+  .welcome-card h2 { font-family:'DM Serif Display',serif; font-size:24px; margin-bottom:8px; }
+  .welcome-card h2 em { color:var(--sage-dark); font-style:italic; }
+  .welcome-card p { font-size:14px; color:var(--muted); line-height:1.65; max-width:380px; margin:0 auto 20px; }
+  .starter-chips { display:flex; flex-wrap:wrap; gap:8px; justify-content:center; }
+  .chip {
+    background:var(--warm-white); border:1px solid var(--border); border-radius:20px;
+    padding:7px 14px; font-size:13px; color:var(--charcoal); cursor:pointer;
+    transition:all 0.2s; font-family:'DM Sans',sans-serif;
+  }
+  .chip:hover { background:var(--sage); color:white; border-color:var(--sage); transform:translateY(-1px); }
+
+  .mood-strip { display:flex; align-items:center; gap:8px; flex-wrap:wrap; }
+  .mood-label { font-size:12px; color:var(--muted); white-space:nowrap; }
+  .mood-btn {
+    background:var(--cream); border:1px solid var(--border); border-radius:8px;
+    padding:5px 12px; font-size:13px; cursor:pointer; transition:all 0.15s;
+    font-family:'DM Sans',sans-serif; color:var(--charcoal);
+  }
+  .mood-btn:hover, .mood-btn.active { background:var(--sage-light); border-color:var(--sage); }
+
+  .msg { display:flex; gap:10px; animation:fadeUp 0.35s ease both; }
+  .msg.user { flex-direction:row-reverse; }
+  .avatar {
+    width:32px; height:32px; border-radius:50%; flex-shrink:0;
+    display:flex; align-items:center; justify-content:center;
+    font-size:12px; font-weight:500; margin-top:2px;
+  }
+  .avatar.bot { background:var(--sage); color:white; font-family:'DM Serif Display',serif; font-size:14px; }
+  .avatar.user-av { background:var(--charcoal); color:white; font-size:11px; }
+  .bubble { max-width:75%; padding:12px 16px; border-radius:18px; font-size:15px; line-height:1.65; }
+  .msg.bot .bubble { background:var(--bot-bubble); color:var(--charcoal); border-bottom-left-radius:4px; }
+  .msg.user .bubble { background:var(--user-bubble); color:#f5f5f5; border-bottom-right-radius:4px; }
+
+  /* speak button on bot bubble */
+  .speak-btn {
+    background: none; border: none; cursor: pointer;
+    color: var(--muted); font-size: 13px; padding: 2px 4px;
+    margin-top: 4px; display: block; transition: color 0.2s;
+  }
+  .speak-btn:hover { color: var(--sage-dark); }
+
+  .typing-indicator { display:none; align-items:center; gap:10px; animation:fadeUp 0.3s ease both; }
+  .typing-indicator.visible { display:flex; }
+  .dots { background:var(--bot-bubble); border-radius:18px; border-bottom-left-radius:4px; padding:12px 16px; display:flex; gap:5px; align-items:center; }
+  .dot { width:7px; height:7px; border-radius:50%; background:var(--muted); animation:bounce 1.2s ease-in-out infinite; }
+  .dot:nth-child(2){animation-delay:0.2s} .dot:nth-child(3){animation-delay:0.4s}
+  @keyframes bounce { 0%,80%,100%{transform:translateY(0);opacity:0.4} 40%{transform:translateY(-6px);opacity:1} }
+
+  /* ── Input area ── */
+  .input-area {
+    position:relative; z-index:10; padding:14px 24px 18px;
+    background:rgba(250,248,244,0.97); backdrop-filter:blur(12px); border-top:1px solid var(--border);
+  }
+  .crisis-banner {
+    display:none; max-width:680px; margin:0 auto 10px;
+    background:#fff5f0; border:1px solid #f0c0a0; border-radius:12px;
+    padding:10px 14px; font-size:13px; color:#8b4513; line-height:1.6;
+  }
+  .crisis-banner.visible { display:block; animation:fadeUp 0.3s ease; }
+  .crisis-banner strong { display:block; margin-bottom:3px; }
+  .crisis-banner a { color:var(--accent); text-decoration:underline; }
+  .error-toast {
+    display:none; max-width:680px; margin:0 auto 8px;
+    background:#fff0f0; border:1px solid #f5c0c0; border-radius:10px;
+    padding:9px 14px; font-size:13px; color:#a03030;
+  }
+  .error-toast.visible { display:block; animation:fadeUp 0.3s ease; }
+  .input-wrap {
+    max-width:680px; margin:0 auto;
+    display:flex; align-items:flex-end; gap:8px;
+    background:var(--cream); border:1.5px solid var(--border);
+    border-radius:20px; padding:8px 8px 8px 16px; transition:border-color 0.2s;
+  }
+  .input-wrap:focus-within { border-color:var(--sage); }
+  #user-input {
+    flex:1; background:transparent; border:none; outline:none;
+    font-family:'DM Sans',sans-serif; font-size:15px; color:var(--charcoal);
+    resize:none; max-height:120px; line-height:1.5; padding:4px 0;
+  }
+  #user-input::placeholder { color:var(--muted); }
+  #user-input:disabled { opacity:0.5; cursor:not-allowed; }
+
+  /* mic button */
+  #mic-btn {
+    width:36px; height:36px; border-radius:50%; border:none;
+    background:var(--cream); color:var(--muted); cursor:pointer;
+    display:flex; align-items:center; justify-content:center;
+    flex-shrink:0; transition:all 0.2s; border:1px solid var(--border);
+  }
+  #mic-btn:hover { background:var(--sage-light); color:var(--sage-dark); }
+  #mic-btn.listening { background:var(--accent); color:white; border-color:var(--accent); animation:micPulse 1s ease-in-out infinite; }
+  @keyframes micPulse { 0%,100%{transform:scale(1)} 50%{transform:scale(1.1)} }
+
+  #send-btn {
+    width:36px; height:36px; border-radius:12px; border:none;
+    background:var(--sage); color:white; cursor:pointer;
+    display:flex; align-items:center; justify-content:center;
+    flex-shrink:0; transition:all 0.2s;
+  }
+  #send-btn:hover:not(:disabled) { background:var(--sage-dark); transform:scale(1.05); }
+  #send-btn:disabled { opacity:0.45; cursor:not-allowed; }
+  #send-btn svg, #mic-btn svg { width:15px; height:15px; }
+
+  .input-hint { max-width:680px; margin:6px auto 0; font-size:11px; color:var(--muted); text-align:center; opacity:0.7; }
+
+  @keyframes fadeUp { from{opacity:0;transform:translateY(10px)} to{opacity:1;transform:translateY(0)} }
+  @media(max-width:600px){ .bubble{max-width:88%} .logo-text{font-size:18px} }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="logo">
+    <div class="logo-icon"></div>
+    <div class="logo-text">Mind<span>Ease</span></div>
+  </div>
+  <div class="header-right">
+    <button class="icon-btn tts-toggle on" id="tts-toggle" onclick="toggleTTS()">🔊 Voice on</button>
+    <button class="icon-btn" onclick="clearChat()">Clear</button>
+    <div class="status-pill">
+      <div class="status-dot" id="status-dot"></div>
+      <span id="status-text">Connecting…</span>
+    </div>
+  </div>
+</header>
+
+<!-- NLP insight bar -->
+<div class="nlp-bar" id="nlp-bar">
+  <div class="nlp-inner" id="nlp-inner"></div>
+</div>
+
+<div class="chat-container" id="chat-container">
+  <div class="messages-wrap" id="messages">
+
+    <div class="welcome-card">
+      <h2>Hello, I'm here for <em>you</em></h2>
+      <p>A safe, private space to share how you're feeling. I listen without judgment — in English, Tamil, or Hindi.</p>
+      <div class="starter-chips">
+        <button class="chip" onclick="sendChip(this.textContent)">I'm feeling anxious today</button>
+        <button class="chip" onclick="sendChip(this.textContent)">I need someone to talk to</button>
+        <button class="chip" onclick="sendChip(this.textContent)">I've been feeling lonely</button>
+        <button class="chip" onclick="sendChip(this.textContent)">Help me calm down</button>
+        <button class="chip" onclick="sendChip(this.textContent)">என்னால் பேச முடியவில்லை</button>
+        <button class="chip" onclick="sendChip(this.textContent)">मुझे किसी से बात करनी है</button>
+      </div>
+    </div>
+
+    <div class="mood-strip">
+      <span class="mood-label">How are you feeling?</span>
+      <button class="mood-btn" onclick="setMood(this,'😊 Good')">😊 Good</button>
+      <button class="mood-btn" onclick="setMood(this,'😐 Okay')">😐 Okay</button>
+      <button class="mood-btn" onclick="setMood(this,'😔 Low')">😔 Low</button>
+      <button class="mood-btn" onclick="setMood(this,'😰 Anxious')">😰 Anxious</button>
+    </div>
+
+  </div>
+
+  <div class="messages-wrap">
+    <div class="typing-indicator" id="typing">
+      <div class="avatar bot">M</div>
+      <div class="dots"><div class="dot"></div><div class="dot"></div><div class="dot"></div></div>
+    </div>
+  </div>
+</div>
+
+<div class="input-area">
+  <div class="crisis-banner" id="crisis-banner">
+    <strong>You are not alone — help is available right now.</strong>
+    iCall India: <a href="tel:9152987821">9152987821</a> &nbsp;|&nbsp;
+    Vandrevala Foundation: <a href="tel:18602662345">1860-2662-345</a> (24/7, free)
+  </div>
+  <div class="error-toast" id="error-toast"></div>
+  <div class="input-wrap">
+    <textarea id="user-input" placeholder="Type or tap the mic to speak…" rows="1"></textarea>
+    <button id="mic-btn" onclick="toggleMic()" title="Speak your message">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <rect x="9" y="2" width="6" height="11" rx="3"/>
+        <path d="M5 10a7 7 0 0 0 14 0"/><line x1="12" y1="19" x2="12" y2="22"/><line x1="8" y1="22" x2="16" y2="22"/>
+      </svg>
+    </button>
+    <button id="send-btn" onclick="sendMessage()">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+        <line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/>
+      </svg>
+    </button>
+  </div>
+  <div class="input-hint">Enter to send · Shift+Enter new line · Mic to speak · Powered by llama3 via Ollama</div>
+</div>
+
+<script>
+// ═══════════════════════════════════════════
+//  CONFIG
+// ═══════════════════════════════════════════
+const OLLAMA_URL = 'http://localhost:11434/api/chat';
+const MODEL      = 'llama3';
+
+const SYSTEM_PROMPT = `You are MindEase, a warm and empathetic AI mental health companion.
+- Respond with genuine compassion; validate feelings without judgment
+- Give concise, conversational replies (2-4 sentences)
+- Offer practical coping suggestions: breathing, grounding (5-4-3-2-1), journaling, mindfulness
+- Gently encourage professional help for serious issues
+- NEVER diagnose or prescribe medication
+- If the user expresses suicidal thoughts or self-harm intent, respond with deep care and provide: iCall India 9152987821, Vandrevala Foundation 1860-2662-345 (24/7 free)
+- Support English, Tamil, and Hindi — detect the user's language and reply in the SAME language
+- Speak calmly and warmly — you are a caring companion, not a clinical tool`;
+
+// ═══════════════════════════════════════════
+//  STATE
+// ═══════════════════════════════════════════
+let conversationHistory = [];
+let isTyping    = false;
+let ttsEnabled  = true;
+let recognition = null;
+let isListening = false;
+
+// ═══════════════════════════════════════════
+//  CONNECTION CHECK
+// ═══════════════════════════════════════════
+async function checkConnection() {
+  try {
+    const res = await fetch('http://localhost:11434/', { signal: AbortSignal.timeout(3000) });
+    setStatus(res.ok);
+  } catch { setStatus(false); }
+}
+function setStatus(online) {
+  document.getElementById('status-dot').className = 'status-dot' + (online ? '' : ' offline');
+  document.getElementById('status-text').textContent = online ? 'llama3 ready' : 'Ollama offline';
+  if (!online) showError('Ollama is not running. Open a terminal and run: ollama serve');
+  else hideError();
+}
+
+// ═══════════════════════════════════════════
+//  NLP ENGINE  (runs fully in browser — no external API)
+// ═══════════════════════════════════════════
+
+// --- Sentiment / Emotion detection ---
+const EMOTION_PATTERNS = {
+  joy:     ['happy','happiness','joyful','excited','great','amazing','wonderful','love','laugh','grateful','thankful','glad','smile','delighted','cheerful','positive','enjoy','good','fantastic','சந்தோஷம்','खुश'],
+  sadness: ['sad','cry','crying','depressed','depression','hopeless','helpless','empty','lonely','alone','miss','grief','heartbreak','tears','miserable','worthless','devastated','lost','dull','unhappy','துக்கம்','दुखी','उदास'],
+  anxiety: ['anxious','anxiety','worried','worry','nervous','stress','stressed','panic','fear','scared','overwhelmed','uneasy','tense','restless','dread','phobia','கவலை','चिंता','घबराहट'],
+  anger:   ['angry','anger','furious','frustrated','frustration','annoyed','irritated','rage','hate','mad','upset','aggressive','hostile','கோபம்','गुस्सा','क्रोध'],
+};
+
+function detectEmotion(text) {
+  const t = text.toLowerCase();
+  const scores = {};
+  for (const [emotion, words] of Object.entries(EMOTION_PATTERNS)) {
+    scores[emotion] = words.filter(w => t.includes(w)).length;
+  }
+  const top = Object.entries(scores).sort((a,b) => b[1]-a[1])[0];
+  return top[1] > 0 ? top[0] : 'neutral';
+}
+
+// --- Language detection ---
+const TAMIL_RANGE  = /[\u0B80-\u0BFF]/;
+const HINDI_RANGE  = /[\u0900-\u097F]/;
+function detectLanguage(text) {
+  if (TAMIL_RANGE.test(text)) return 'Tamil';
+  if (HINDI_RANGE.test(text)) return 'Hindi';
+  return 'English';
+}
+
+// --- Keyword extraction (top meaningful words) ---
+const STOP_WORDS = new Set(['i','me','my','we','you','the','a','an','is','am','are','was','were','be','been','have','has','had','do','does','did','will','would','could','should','may','might','to','of','in','on','at','for','with','about','and','or','but','not','so','that','this','it','its','just','very','really','feel','feeling','little','much','more','some','than','then','there','their','they','what','who','how','when','where','why','can','get','got','im','ive','dont','cant','wont','please','help']);
+function extractKeywords(text) {
+  return text.toLowerCase()
+    .replace(/[^\w\s]/g,'')
+    .split(/\s+/)
+    .filter(w => w.length > 3 && !STOP_WORDS.has(w))
+    .slice(0, 4);
+}
+
+// --- Crisis detection ---
+const CRISIS_KEYWORDS = ['suicide','kill myself','end my life','want to die','self harm','hurt myself','no reason to live',"can't go on",'cant go on','end it all','not worth living'];
+function isCrisis(text) {
+  const t = text.toLowerCase();
+  return CRISIS_KEYWORDS.some(k => t.includes(k));
+}
+
+// --- Run NLP and update bar ---
+function runNLP(text) {
+  const emotion  = detectEmotion(text);
+  const lang     = detectLanguage(text);
+  const keywords = extractKeywords(text);
+  const crisis   = isCrisis(text);
+
+  // Crisis banner
+  document.getElementById('crisis-banner').classList.toggle('visible', crisis);
+
+  // Build pills
+  const inner = document.getElementById('nlp-inner');
+  inner.innerHTML = '';
+
+  // Emotion
+  const emojiMap = { joy:'😊', sadness:'😔', anxiety:'😰', anger:'😤', neutral:'😐' };
+  addPill(inner, `${emojiMap[emotion]||'😐'} ${emotion}`, `emotion-${emotion}`);
+
+  // Language
+  const langEmoji = { Tamil:'🇮🇳 Tamil', Hindi:'🇮🇳 Hindi', English:'🌐 English' };
+  addPill(inner, langEmoji[lang]||lang, 'lang');
+
+  // Keywords
+  keywords.forEach(kw => addPill(inner, `# ${kw}`, 'kw'));
+
+  // Crisis
+  if (crisis) addPill(inner, '⚠ crisis detected', 'crisis');
+
+  document.getElementById('nlp-bar').classList.add('visible');
+  return { emotion, lang, keywords, crisis };
+}
+
+function addPill(container, text, cls) {
+  const span = document.createElement('span');
+  span.className = `nlp-pill ${cls}`;
+  span.textContent = text;
+  container.appendChild(span);
+}
+
+// ═══════════════════════════════════════════
+//  SPEECH-TO-TEXT  (Web Speech API)
+// ═══════════════════════════════════════════
+function setupRecognition() {
+  const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+  if (!SpeechRecognition) return null;
+  const r = new SpeechRecognition();
+  r.continuous    = false;
+  r.interimResults = true;
+  r.lang          = 'en-IN'; // works for English + handles Indian accent
+
+  r.onresult = (e) => {
+    const transcript = Array.from(e.results).map(r => r[0].transcript).join('');
+    document.getElementById('user-input').value = transcript;
+  };
+  r.onend = () => {
+    isListening = false;
+    document.getElementById('mic-btn').classList.remove('listening');
+    // Auto-send if we got something
+    const val = document.getElementById('user-input').value.trim();
+    if (val) sendMessage();
+  };
+  r.onerror = (e) => {
+    isListening = false;
+    document.getElementById('mic-btn').classList.remove('listening');
+    if (e.error !== 'aborted') showError('Microphone error: ' + e.error);
+  };
+  return r;
+}
+
+function toggleMic() {
+  if (!recognition) {
+    recognition = setupRecognition();
+    if (!recognition) { showError('Your browser does not support Speech-to-Text. Try Chrome.'); return; }
+  }
+  if (isListening) {
+    recognition.stop();
+  } else {
+    hideError();
+    recognition.start();
+    isListening = true;
+    document.getElementById('mic-btn').classList.add('listening');
+    document.getElementById('user-input').placeholder = 'Listening…';
+    setTimeout(() => { document.getElementById('user-input').placeholder = 'Type or tap the mic to speak…'; }, 6000);
+  }
+}
+
+// ═══════════════════════════════════════════
+//  TEXT-TO-SPEECH  (Web Speech Synthesis API)
+// ═══════════════════════════════════════════
+function toggleTTS() {
+  ttsEnabled = !ttsEnabled;
+  const btn = document.getElementById('tts-toggle');
+  btn.textContent = ttsEnabled ? '🔊 Voice on' : '🔇 Voice off';
+  btn.classList.toggle('on', ttsEnabled);
+  if (!ttsEnabled) window.speechSynthesis.cancel();
+}
+
+function speak(text, lang) {
+  if (!ttsEnabled || !window.speechSynthesis) return;
+  window.speechSynthesis.cancel();
+  const utter = new SpeechSynthesisUtterance(text);
+  utter.rate   = 0.92;
+  utter.pitch  = 1.0;
+  utter.volume = 1.0;
+  // Choose voice language
+  const voices = window.speechSynthesis.getVoices();
+  const langCode = lang === 'Tamil' ? 'ta' : lang === 'Hindi' ? 'hi' : 'en';
+  const match = voices.find(v => v.lang.startsWith(langCode)) || voices.find(v => v.lang.startsWith('en'));
+  if (match) utter.voice = match;
+  window.speechSynthesis.speak(utter);
+}
+
+// ═══════════════════════════════════════════
+//  CHAT
+// ═══════════════════════════════════════════
+function setMood(btn, mood) {
+  document.querySelectorAll('.mood-btn').forEach(b => b.classList.remove('active'));
+  btn.classList.add('active');
+  sendChip('My current mood is: ' + mood);
+}
+function sendChip(text) {
+  document.getElementById('user-input').value = text;
+  sendMessage();
+}
+
+async function sendMessage() {
+  const input = document.getElementById('user-input');
+  const text  = input.value.trim();
+  if (!text || isTyping) return;
+
+  appendMessage('user', text);
+  conversationHistory.push({ role: 'user', content: text });
+  input.value = '';
+  input.style.height = 'auto';
+
+  const nlp = runNLP(text);
+  setTyping(true);
+  hideError();
+
+  try {
+    const res = await fetch(OLLAMA_URL, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        model: MODEL,
+        messages: [
+          { role: 'system', content: SYSTEM_PROMPT },
+          ...conversationHistory
+        ],
+        stream: false
+      })
+    });
+
+    if (!res.ok) throw new Error('HTTP ' + res.status);
+    const data  = await res.json();
+    const reply = data.message?.content?.trim() || "I'm here with you. Could you tell me a little more?";
+
+    setTyping(false);
+    conversationHistory.push({ role: 'assistant', content: reply });
+    appendMessage('bot', reply, nlp.lang);
+    setStatus(true);
+    speak(reply, nlp.lang);
+
+  } catch (err) {
+    setTyping(false);
+    if (err.message.includes('fetch') || err.message.includes('Network')) setStatus(false);
+    else showError('Something went wrong — please try again.');
+  }
+}
+
+function appendMessage(role, text, lang) {
+  const wrap = document.getElementById('messages');
+  const div  = document.createElement('div');
+  div.className = 'msg ' + (role === 'user' ? 'user' : 'bot');
+
+  const av = document.createElement('div');
+  av.className  = 'avatar ' + (role === 'user' ? 'user-av' : 'bot');
+  av.textContent = role === 'user' ? 'You' : 'M';
+
+  const right = document.createElement('div');
+
+  const bubble = document.createElement('div');
+  bubble.className  = 'bubble';
+  bubble.textContent = text;
+  right.appendChild(bubble);
+
+  // Speak button on bot messages
+  if (role === 'bot') {
+    const speakBtn = document.createElement('button');
+    speakBtn.className   = 'speak-btn';
+    speakBtn.textContent = '🔈 Replay';
+    speakBtn.onclick     = () => speak(text, lang || 'English');
+    right.appendChild(speakBtn);
+  }
+
+  div.appendChild(av);
+  div.appendChild(right);
+  wrap.appendChild(div);
+  scrollToBottom();
+}
+
+function setTyping(show) {
+  isTyping = show;
+  document.getElementById('typing').classList.toggle('visible', show);
+  document.getElementById('user-input').disabled = show;
+  document.getElementById('send-btn').disabled   = show;
+  if (show) scrollToBottom();
+}
+function scrollToBottom() {
+  const c = document.getElementById('chat-container');
+  setTimeout(() => c.scrollTo({ top: c.scrollHeight, behavior: 'smooth' }), 50);
+}
+function showError(msg) {
+  const el = document.getElementById('error-toast');
+  el.textContent = msg; el.classList.add('visible');
+}
+function hideError() { document.getElementById('error-toast').classList.remove('visible'); }
+function clearChat() {
+  conversationHistory = [];
+  document.querySelectorAll('#messages .msg').forEach(m => m.remove());
+  document.getElementById('crisis-banner').classList.remove('visible');
+  document.getElementById('nlp-bar').classList.remove('visible');
+  document.querySelectorAll('.mood-btn').forEach(b => b.classList.remove('active'));
+  hideError();
+  window.speechSynthesis.cancel();
+}
+
+// Textarea
+document.getElementById('user-input').addEventListener('input', function () {
+  this.style.height = 'auto';
+  this.style.height = Math.min(this.scrollHeight, 120) + 'px';
+});
+document.getElementById('user-input').addEventListener('keydown', function (e) {
+  if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendMessage(); }
+});
+
+// Init
+checkConnection();
+window.speechSynthesis.onvoiceschanged = () => {}; // pre-load voices
+</script>
+</body>
+</html>
